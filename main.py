@@ -12,6 +12,12 @@ Judge criteria, in order:
 Pattern: ONE concrete scene (sleep installs overnight) + ONE reversal
 (eight hours of buffering replaced by an install) + ONE landing final line
 (side effects include dreaming in 4K).
+
+Hardening: validate() proves the text is UTF-8 encodable (encode first)
+before any write, so a lone/unpaired surrogate exits 1 cleanly instead
+of raising a mid-write UnicodeEncodeError; it also bounds the UTF-8
+byte length (4 bytes per char max) so the entry stays within the gate
+even for multi-byte characters.
 """
 
 import os
@@ -29,6 +35,16 @@ def validate(text):
         raise SystemExit("entry must be a single line")
     if any(ord(c) < 0x20 for c in text):
         raise SystemExit("entry contains a control character")
+    # Prove UTF-8 encodability BEFORE any write: a lone/unpaired surrogate
+    # raises UnicodeEncodeError here, so we exit 1 cleanly instead of
+    # failing mid-write with a partially written entry.txt.
+    try:
+        encoded = text.encode("utf-8")
+    except UnicodeEncodeError:
+        raise SystemExit("entry is not valid UTF-8")
+    # UTF-8 byte-length bound: at most 4 bytes per character.
+    if len(encoded) > MAX_CHARS * 4:
+        raise SystemExit("entry exceeds UTF-8 byte limit")
     return text
 
 
